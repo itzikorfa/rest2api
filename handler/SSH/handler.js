@@ -7,7 +7,7 @@ var get_connection = (username, host, password = null, privatekey = null, port =
             host: host,
             port: port,
             username: username,
-            privateKey: require('fs').readFileSync(privatekey)
+            privateKey: Buffer.from(privatekey, 'base64').toString('utf8')
         };
     } else if (password) {
         return {
@@ -30,10 +30,10 @@ function sshcommand(callback, command, username, host, password = null, privatek
                 conn.end();
             }).on('data', function (data) {
                 console.log('STDOUT: ' + data);
-                callback({
+                callback(undefined, {
                     command,
                     host,
-                    STDOUT: data,
+                    STDOUT: data.toString('utf8'),
                     status: stat.SUCCESS
                 });
             }).stderr.on('data', function (data) {
@@ -55,31 +55,33 @@ function scp(callback, src_file, dst_file, username, host, password = null, priv
         console.log('Client :: ready');
         conn.sftp(function (err, sftp) {
             if (err) {
-                callback(err.message);
+                callback({
+                    src_file,
+                    host,
+                    stderr: err.message.toString('utf8'),
+                    status: stat.FAILED
+                });
             }
             debugger;
             sftp.fastPut(src_file, dst_file, function (err) {
-                if (err) callback(err.message);
+                if (err) callback({
+                    src_file,
+                    host,
+                    stderr: err.message.toString('utf8'),
+                    status: stat.FAILED
+                });
+
                 console.log('done');
                 conn.end();
-                callback(undefined, "done");
+                callback(undefined, {
+                    src_file,
+                    host,
+                    stdout: 'done'.toString('utf8'),
+                    status: stat.SUCCESS
+                });
+
+
             });
-
-            // var fs = require("fs"); // Use node filesystem
-            // var readStream = fs.createReadStream(src_file);
-            // var writeStream = sftp.createWriteStream(dst_file);
-
-            // writeStream.on('close', function () {
-            //     console.log("- file transferred succesfully");
-            // });
-
-            // writeStream.on('end', function () {
-            //     console.log("sftp connection closed");
-            //     conn.close();
-            // });
-
-            // initiate transfer of file
-            // readStream.pipe(writeStream);
         });
     }).connect(get_connection(username, host, password, privatekey, port));
 }
